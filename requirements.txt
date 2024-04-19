@@ -1,0 +1,8 @@
+fastapi
+sqlmodel
+uvicorn
+psycopg2
+alembic
+python-dotenv
+datetime
+pydantic
