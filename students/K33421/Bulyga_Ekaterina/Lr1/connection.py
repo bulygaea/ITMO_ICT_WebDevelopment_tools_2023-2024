@@ -6,7 +6,7 @@ load_dotenv()
 db_url = os.getenv('DB_ADMIN')
 engine = create_engine(db_url, echo=True)
 
-
+@app.on_event("startup")
 def init_db():
     SQLModel.metadata.create_all(engine)
 
