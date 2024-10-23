@@ -9,16 +9,16 @@ from dotenv import load_dotenv
 import jwt
 
 from auth.auth import UserManager, SECRET_KEY, ALGORITHM
+import worker
 
 app = FastAPI()
-load_dotenv()
 db_url = os.getenv('DB_ADMIN')
 engine = create_engine(db_url, echo=True)
 
 
-@app.on_event("startup")
-def init_db():
-    SQLModel.metadata.create_all(engine)
+#@app.on_event("startup")
+#def init_db():
+    #SQLModel.metadata.create_all(engine)
 
 
 def get_session():
@@ -76,14 +76,13 @@ def get_current_user(token: str = Depends(oauth2_scheme), session: Session = Dep
 
 
 @app.get("/users/me/")
-async def read_users_me(current_user: User = Depends(get_current_user)):
+def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 
 @app.get("/users/{username}/", response_model=User)
-async def read_user(username: str, current_user: User = Depends(get_current_user),
+def read_user(username: str, current_user: User = Depends(get_current_user),
                     session: Session = Depends(get_session)):
-    # Получаем пользователя из базы данных
     user = user_manager.get_user(session, username)
     if not user:
         raise HTTPException(
@@ -94,14 +93,12 @@ async def read_user(username: str, current_user: User = Depends(get_current_user
 
 
 @app.get("/users/", response_model=List[User])
-async def read_users(current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    # Получаем список пользователей из базы данных
+def read_users(current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     return session.exec(select(User)).all()
 
 
 @app.put("/users/change_password/")
-async def change_password(new_password: str, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    # Обновляем пароль текущего пользователя
+def change_password(new_password: str, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     user_manager.change_password(session, current_user.username, new_password)
     return {"message": "Password changed successfully"}
 
@@ -290,3 +287,15 @@ def comment_create(comment: CommentDefault, session=Depends(get_session),
     session.commit()
     session.refresh(comment)
     return {"status": 200, "data": comment}
+
+
+@app.post("/parse")
+def parse(season_start: int, season_end: int, year: int) -> dict:
+    task = worker.parse.delay(season_start, season_end, year)
+    return dict(task_id=task.id, status=task.status)
+
+
+@app.get("/parse")
+def get_parse_status(task_id: str) -> dict:
+    task = worker.parse.AsyncResult(task_id)
+    return dict(task_id=task.id, status=task.status)
